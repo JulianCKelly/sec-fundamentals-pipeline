@@ -1,69 +1,149 @@
 # SEC Fundamentals Pipeline
 
-A production-style data pipeline that ingests raw SEC filings and transforms them into standardized, analytics-ready financial datasets.
-This project focuses on correctness, reproducibility, and handling real-world financial reporting inconsistencies across companies.
+A financial data pipeline that ingests raw SEC filing data, standardizes XBRL facts, and produces a clean, analytics-ready fundamentals dataset.
 
-This project is designed as a case study in real-world data engineering:
-- messy, semi-structured source data
-- inconsistent reporting schemas across companies
-- ambiguous mapping between raw fields and business metrics
-- the need to produce trustworthy, decision-ready outputs
+This project is structured as a real-world data engineering case study:
+- messy, semi-structured source data (SEC filings + XBRL)
+- inconsistent tagging across companies
+- overlapping and duplicate facts across filings
+- the need to produce a single, trustworthy dataset for analysis
 
 ---
 
 ## Problem
 
-Raw SEC filing data is not directly usable for analysis.
+Raw SEC XBRL data is not directly usable.
 
 Challenges include:
-- inconsistent tagging of financial metrics across companies
-- duplicate or overlapping facts across filings
-- mixed reporting periods (quarterly vs annual)
-- lack of standardized schema for downstream consumption
+- inconsistent metric tagging (multiple tags for the same concept)
+- duplicate facts across filings and amendments
+- mixed reporting periods (instant vs duration)
+- segmented vs non-segmented facts
+- no standard schema for downstream use
 
-The goal of this project is to:
+The goal of this pipeline is to:
 
-> transform raw filing data into a clean, standardized financial dataset suitable for analytics and modeling
+#### transform raw SEC filing data into a clean, standardized, deduplicated financial dataset.
 
 ---
 
 ## Scope (v1)
 
-- 5–10 companies (AAPL, MSFT, NVDA, JPM, AMZN)
-- Core financial metrics:
-  - revenue
-  - net_income
-  - total_assets
-  - total_liabilities
-  - operating_income
-  - cash_and_cash_equivalents
-  - shareholders_equity
+Companies:
+- AAPL, MSFT, NVDA, JPM, AMZN
+
+Core metrics:
+- revenue
+- net_income
+- operating_income
+- total_assets
+- total_liabilities
+- cash_and_cash_equivalents
+- shareholders_equity
 
 ---
 
-## Architecture (planned)
+## Pipeline Stages
 
-Raw JSON (SEC API) 
+| Stage | Output | Purpose | Rows |
+|---|---|---|---:|
+| Filing ingestion | `data/raw/*_filings.json` | discover recent filings | |
+| Filing parse | `data/interim/filings.parquet` | normalize filing metadata | |
+| XBRL ingest | `data/raw/xbrl_json/*` | retrieve structured statements | |
+| Flatten | `data/interim/xbrl_facts_raw.parquet` | convert nested JSON → rows | 69,171 |
+| Standardize | `data/interim/xbrl_facts_standardized.parquet` | map tags → canonical metrics | 1,959 |
+| Dedupe | `data/interim/xbrl_facts_deduped.parquet` | enforce one fact per company-metric-period | 145 |
+| Mart | `data/marts/fundamentals.parquet` | analytics-ready dataset | 63 |
 
-Parsed / Flattened Facts (Python)
+---
 
-Staging (dbt)
+## Key Design Decisions
 
-Intermediate (standardization + deduplication)
+### 1. Canonical Metric Mapping
 
-Marts (analytics-ready tables)
+SEC tags are mapped to standardized metrics using a seed file:
+
+dbt_project/seeds/tag_mapping.csv
+
+Each mapping includes:
+- source statement
+- raw XBRL tag
+- canonical metric
+- priority ranking
+
+This allows controlled resolution of conflicting tags.
+
+---
+
+### 2. Explicit Grain Definition
+
+Final grain:
+
+ticker, canonical_period_end, and canonical_period_type
+
+Where:
+- `duration` = income statement metrics
+- `instant` = balance sheet metrics
+
+This avoids mixing incompatible financial concepts.
+
+---
+
+### 3. Precedence Rules (Deduplication)
+
+When multiple facts exist for the same company, metric, and period:
+
+1. Lower mapping priority wins (more canonical tag)
+2. Non-segmented facts preferred over segmented
+3. Preferred filing form (10-K vs 10-Q depending on context)
+4. Most recent filing as final tie-breaker
+
+Result:
+Remaining duplicate company-metric-period rows: 0
+---
+
+### 4. Correctness Over Convenience
+
+The pipeline does not assume:
+- tags are consistent
+- filings are clean
+- one fact exists per metric
+
+Instead, it explicitly:
+- standardizes
+- filters
+- ranks
+- deduplicates
+
+before producing outputs.
+
+---
+
+## Example Output
+
+| ticker | canonical_period_end | canonical_period_type | revenue | net_income | total_assets |
+|---|---|---|---:|---:|---:|
+| AAPL | 2024-09-28 | duration | ... | ... | ... |
+| AAPL | 2024-09-28 | instant | ... | ... | 364980000000 |
+
+- `duration` rows represent flow metrics (income statement)
+- `instant` rows represent point-in-time metrics (balance sheet)
 
 ---
 
 ## Repo Structure
+
 data/
 raw/        # raw API responses
-interim/    # flattened / parsed data
+interim/    # cleaned / normalized data
 marts/      # final outputs
 
 src/
-ingest_sec_facts.py
-parse_company_facts.py
+ingest_xbrl_json.py
+flatten_xbrl_json.py
+standardize_metric_tags.py
+dedupe_company_period_facts.py
+build_fundamentals_mart.py
 
 dbt_project/
 seeds/
@@ -77,71 +157,37 @@ source_notes.md
 ## How to Run
 
 ```bash
-pip install -r requirements.txt
-export SEC_API_KEY=your_key_here
-
-python src/ingest_sec_facts.py
-python src/parse_company_facts.py
+python src/ingest_xbrl_json.py
+python src/flatten_xbrl_json.py
+python src/standardize_metric_tags.py
+python src/dedupe_company_period_facts.py
+python src/build_fundamentals_mart.py
 ```
 
-Outputs will be written to:
-- data/raw/
-- data/interim/
+---
+### Edge Cases Handled
+- multiple tags mapping to the same metric
+- duplicate facts across filings
+- segmented vs consolidated facts
+- missing or partial periods
+- consistent statement naming across companies
+- instant vs duration metric conflicts
 
-dbt layer coming next. 
+### Future Improvements
+Split marts into:
+- income statement
+- balance sheet
+- data quality checks (row uniqueness, null constraints)
+- integrate dbt models for transformations
+- expand company coverage
+- build a lightweight dashboard or notebook for analysis
+
+---
 
 Design Principles
 - correctness over convenience
 - explicit grain definition
-- reproducible local pipeline 
+- reproducible local pipeline
 - documented tradeoffs
 - business-aligned modeling
 
-## Edge Cases and Failure Modes
-
-This project intentionally treats raw SEC data as a source that requires judgment, not blind trust.
-
-Key edge cases this pipeline is designed to account for:
-
-### 1. Duplicate or overlapping filings
-A company may have multiple filings that appear to represent the same reporting period.  
-Examples include amended forms, overlapping facts, or multiple records returned for similar filing windows.
-
-**Current handling**
-- retain filing metadata at raw level
-- plan to deduplicate in transformation layers using company, form type, reporting period, and latest filing date
-
-### 2. Quarterly vs annual reporting ambiguity
-10-K and 10-Q filings represent different reporting scopes and should not be merged naively.
-
-**Current handling**
-- preserve form type in parsed outputs
-- plan to model annual and quarterly reporting separately before any standardized downstream mart is built
-
-### 3. Inconsistent metric tagging across companies
-The same business concept may appear under different source tags depending on issuer or filing structure.
-
-**Current handling**
-- use an explicit tag mapping table rather than assuming one universal source field per metric
-- prioritize transparency over aggressive inference
-
-### 4. Amended filings and restatements
-Amended filings may supersede prior filings or revise previously reported values.
-
-**Current handling**
-- preserve accession number and filing timestamp
-- plan to define clear precedence rules so downstream outputs prefer the most relevant version of a fact
-
-### 5. Incomplete comparability across companies
-Even after normalization, financial metrics may not be perfectly comparable across issuers due to reporting practices, taxonomy differences, or missing values.
-
-**Current handling**
-- treat standardized outputs as analytics-ready, but not assumption-free
-- document known gaps rather than hiding them
-
-### 6. Metadata success does not equal financial fact success
-Successfully retrieving filings does not guarantee that downstream financial concepts will be easy to parse or standardize.
-
-**Current handling**
-- separate ingestion, parsing, standardization, and mart-building into distinct layers
-- treat each layer as independently testable
