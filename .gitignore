@@ -5,6 +5,7 @@ __pycache__/
 *.csv
 *.log
 
+
 !requirements.txt
 !dbt_project/seeds/tag_mapping.csv
 
