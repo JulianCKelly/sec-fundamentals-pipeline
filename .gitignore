@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+.env
+*.parquet
+*.csv
+*.log
+
+!requirements.txt
+!dbt_project/seeds/tag_mapping.csv
+
+data/raw/*
+data/interim/*
+data/marts/*
+!data/raw/samples/
+!data/raw/samples/.gitkeep
