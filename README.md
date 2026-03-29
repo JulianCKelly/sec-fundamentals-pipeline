@@ -8,6 +8,20 @@ This project is structured as a real-world data engineering case study:
 - overlapping and duplicate facts across filings
 - the need to produce a single, trustworthy dataset for analysis
 
+## Why This Matters
+
+Financial data pipelines fail silently when:
+- multiple tags represent the same metric (revenue vs sales)
+- filings overlap or restate prior periods
+- instant and duration metrics are mixed
+
+This pipeline enforces:
+- one canonical metric per concept
+- one fact per company-metric-period
+- explicit separation of point-in-time vs flow data
+
+The result is a dataset that can be safely used for analysis without hidden duplication or semantic ambiguity.
+
 ---
 
 ## Problem
@@ -71,7 +85,9 @@ Each mapping includes:
 - canonical metric
 - priority ranking
 
-This allows controlled resolution of conflicting tags.
+Tradeoff:
+- Manual mapping requires maintenance
+- But ensures deterministic and explainable metric selection
 
 ---
 
@@ -97,6 +113,10 @@ When multiple facts exist for the same company, metric, and period:
 2. Non-segmented facts preferred over segmented
 3. Preferred filing form (10-K vs 10-Q depending on context)
 4. Most recent filing as final tie-breaker
+
+Tradeoff:
+- Ranking logic may discard valid alternate representations
+- But guarantees a single source of truth per metric
 
 Result:
 Remaining duplicate company-metric-period rows: 0
@@ -158,6 +178,7 @@ docs/
 ## How to Run
 
 ```bash
+pip install -r requirements.txt
 python src/ingest_xbrl_json.py
 python src/flatten_xbrl_json.py
 python src/standardize_metric_tags.py
@@ -171,7 +192,7 @@ python src/build_fundamentals_mart.py
 - duplicate facts across filings
 - segmented vs consolidated facts
 - missing or partial periods
-- consistent statement naming across companies
+- inconsistent statement naming across companies
 - instant vs duration metric conflicts
 
 ## Next Steps
