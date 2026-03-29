@@ -133,25 +133,26 @@ before producing outputs.
 
 ## Repo Structure
 
+```bash
 data/
-raw/        # raw API responses
-interim/    # cleaned / normalized data
-marts/      # final outputs
+  raw/        # raw API responses
+  interim/    # cleaned / normalized data
+  marts/      # final outputs
 
 src/
-ingest_xbrl_json.py
-flatten_xbrl_json.py
-standardize_metric_tags.py
-dedupe_company_period_facts.py
-build_fundamentals_mart.py
+  ingest_xbrl_json.py
+  flatten_xbrl_json.py
+  standardize_metric_tags.py
+  dedupe_company_period_facts.py
+  build_fundamentals_mart.py
 
 dbt_project/
-seeds/
-tag_mapping.csv
+  seeds/
+    tag_mapping.csv
 
 docs/
-source_notes.md
-
+  source_notes.md
+```
 ---
 
 ## How to Run
@@ -173,18 +174,32 @@ python src/build_fundamentals_mart.py
 - consistent statement naming across companies
 - instant vs duration metric conflicts
 
-### Future Improvements
-Split marts into:
-- income statement
-- balance sheet
-- data quality checks (row uniqueness, null constraints)
-- integrate dbt models for transformations
-- expand company coverage
-- build a lightweight dashboard or notebook for analysis
+## Next Steps
 
+### Data Modeling
+- split final outputs into:
+  - income statement (duration metrics)
+  - balance sheet (instant metrics)
+- enforce stricter schema constraints (types, null handling)
+
+### Data Quality
+- add validation checks:
+  - uniqueness of company-period-metric
+  - missing critical fields
+  - sanity checks on financial values
+- surface row counts and validation summaries
+
+### Pipeline Evolution
+- migrate transformations into dbt models
+- expand coverage beyond initial company set
+- introduce incremental ingestion for new filings
+
+### Consumption Layer
+- add lightweight analysis notebook or dashboard
+- expose dataset for downstream analytics use cases
 ---
 
-Design Principles
+### Design Principles
 - correctness over convenience
 - explicit grain definition
 - reproducible local pipeline
