@@ -1,0 +1,12 @@
+taxonomy,source_tag,standard_metric,priority
+us-gaap,Revenues,revenue,1
+us-gaap,SalesRevenueNet,revenue,2
+us-gaap,NetIncomeLoss,net_income,1
+us-gaap,Assets,total_assets,1
+us-gaap,Liabilities,total_liabilities,1
+us-gaap,OperatingIncomeLoss,operating_income,1
+us-gaap,CashAndCashEquivalentsAtCarryingValue,cash_and_cash_equivalents,1
+us-gaap,StockholdersEquity,shareholders_equity,1
+,,,
+,,,
+,,,
